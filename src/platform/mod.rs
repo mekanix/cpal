@@ -120,6 +120,7 @@ macro_rules! impl_platform_host {
         /// - `"custom"` - Custom host (requires `custom` feature)
         /// - `"jack"` - JACK Audio Connection Kit
         /// - `"null"` - Null host
+        /// - `"oss"` - Open Sound System
         /// - `"wasapi"` - Windows Audio Session API
         /// - `"webaudio"` - Web Audio API
         ///
@@ -867,6 +868,8 @@ mod platform_impl {
     #[cfg(feature = "jack")]
     use super::JackHost;
     use crate::host::alsa::Host as AlsaHost;
+    #[cfg(target_os = "freebsd")]
+    use crate::host::oss::Host as OssHost;
     #[cfg(feature = "pipewire")]
     use crate::host::pipewire::Host as PipeWireHost;
     #[cfg(feature = "pulseaudio")]
@@ -876,11 +879,19 @@ mod platform_impl {
         #[cfg(feature = "pulseaudio")] PulseAudio => PulseAudioHost,
         #[cfg(feature = "jack")] Jack "JACK" => JackHost,
         Alsa "ALSA" => AlsaHost,
+        #[cfg(target_os = "freebsd")] Oss "OSS" => OssHost,
         #[cfg(feature = "custom")] Custom => super::CustomHost,
     );
 
     /// The default host for the current compilation target platform.
     pub fn default_host() -> Host {
+        // The native OSS backend takes precedence on FreeBSD.
+        #[cfg(target_os = "freebsd")]
+        if <OssHost as crate::traits::HostTrait>::is_available() {
+            if let Ok(host) = OssHost::new() {
+                return host.into();
+            }
+        }
         #[cfg(feature = "pipewire")]
         if <PipeWireHost as crate::traits::HostTrait>::is_available() {
             if let Ok(host) = PipeWireHost::new() {
@@ -1022,5 +1033,24 @@ mod platform_impl {
         NullHost::new()
             .expect("the default host should always be available")
             .into()
+    }
+}
+
+#[cfg(all(test, target_os = "freebsd"))]
+mod tests {
+    use super::HostId;
+    use std::str::FromStr;
+
+    #[test]
+    fn oss_host_id_round_trips() {
+        assert_eq!(HostId::Oss.name(), "OSS");
+        assert_eq!(HostId::Oss.to_string(), "oss");
+        assert_eq!(HostId::from_str("oss"), Ok(HostId::Oss));
+        assert_eq!(HostId::from_str("OSS"), Ok(HostId::Oss));
+    }
+
+    #[test]
+    fn oss_is_the_default_host_on_freebsd() {
+        assert_eq!(super::default_host().id(), HostId::Oss);
     }
 }

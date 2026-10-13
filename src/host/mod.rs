@@ -23,6 +23,9 @@ pub(crate) mod aaudio;
 ))]
 pub(crate) mod alsa;
 
+#[cfg(target_os = "freebsd")]
+pub(crate) mod oss;
+
 #[cfg(all(windows, feature = "asio"))]
 pub(crate) mod asio;
 
@@ -306,6 +309,7 @@ pub(crate) fn secs_to_nanos(secs: f64) -> u64 {
 #[cfg(any(
     all(windows, feature = "asio"),
     target_vendor = "apple",
+    target_os = "freebsd",
     all(
         any(
             target_os = "linux",
